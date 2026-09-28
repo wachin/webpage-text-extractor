@@ -26,14 +26,14 @@ That `.txt` file is much easier to handle: you attach it to your AI agent, paste
 
 ## Features
 
-- 🔍 **Recursive**: traverses all subdirectories with `os.walk`.
-- 🧠 **Text detection**: attempts to read each file as UTF-8; binary files (images, fonts, videos) are listed by name without cluttering output.
-- 🏷️ **Clear separators**: each text file is preceded by a header with its full path:
+- **Recursive**: traverses all subdirectories with `os.walk`.
+- **Text detection**: attempts to read each file as UTF-8; binary files (images, fonts, videos) are listed by name without cluttering output.
+- **Clear separators**: each text file is preceded by a header with its full path:
   ```
   --- Text file content: Blog-example/page.html ---
   ```
-- 🚫 **Zero dependencies**: only Python standard library. No `pip install` needed.
-- ⚙️ **Two versions**:
+- **Zero dependencies**: only Python standard library. No `pip install` needed.
+- **Two versions**:
   - `extract_text.py` — version with command-line arguments (recommended).
   - `extract_text_simple.py` — original minimal version, edit two variables and run.
 
@@ -57,7 +57,7 @@ cd webpage-text-extractor
 
 Nothing else to install.
 
-## 🛠Usage
+## Usage
 
 ### Command-line arguments version (recommended)
 
@@ -186,7 +186,7 @@ Any other file that cannot be decoded as UTF-8 is marked as `--- Non-text file: 
 - **Encoding**: everything is processed as UTF-8. If you have files in another encoding (e.g., Latin-1), convert them first or modify `open(..., encoding="utf-8")`.
 - **File order**: `os.walk` traverses in filesystem order. If you need a specific order, sort the `files` list inside the script.
 
-## ⚠Limitations
+## Limitations
 
 - Does not interpret HTML: extracts the **source code as-is**, not the rendered visible text. This is an advantage for analysis and design replication tasks, but if you only want visible text, you'll need something like `BeautifulSoup` or `html2text`.
 - Very large files are loaded entirely into memory (normal for this use case).

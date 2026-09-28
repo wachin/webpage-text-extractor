@@ -24,14 +24,14 @@ Ese archivo `.txt` es mucho más fácil de manejar: lo adjuntas a tu agente de I
 
 ## Características
 
-- 🔍 **Recursivo**: recorre todos los subdirectorios con `os.walk`.
-- 🧠 **Detección de texto**: intenta leer cada archivo como UTF-8; los binarios (imágenes, fuentes, videos) se listan por nombre sin ensuciar la salida.
-- 🏷️ **Separadores claros**: cada archivo de texto va precedido de un encabezado con su ruta completa:
+- **Recursivo**: recorre todos los subdirectorios con `os.walk`.
+- **Detección de texto**: intenta leer cada archivo como UTF-8; los binarios (imágenes, fuentes, videos) se listan por nombre sin ensuciar la salida.
+- **Separadores claros**: cada archivo de texto va precedido de un encabezado con su ruta completa:
   ```
   --- Contenido del archivo de texto: Blog-ejemplo/pagina.html ---
   ```
-- 🚫 **Cero dependencias**: solo biblioteca estándar de Python. No necesitas `pip install` nada.
-- ⚙️ **Dos versiones**:
+- **Cero dependencias**: solo biblioteca estándar de Python. No necesitas `pip install` nada.
+- **Dos versiones**:
   - `extract_text.py` — versión con argumentos de línea de comandos (recomendada).
   - `extract_text_simple.py` — versión original mínima, editas dos variables y listo.
 
@@ -55,7 +55,7 @@ cd webpage-text-extractor
 
 No hay nada más que instalar. 
 
-## 🛠Uso
+## Uso
 
 ### Versión con argumentos de línea de comandos (recomendada)
 
@@ -184,7 +184,7 @@ Cualquier otro archivo que no se pueda decodificar como UTF-8 se marca como `---
 - **Codificación**: todo se procesa como UTF-8. Si tienes archivos en otra codificación (p. ej. Latin-1), conviértelos antes o modifica `open(..., encoding="utf-8")`.
 - **Orden de los archivos**: `os.walk` recorre en el orden del sistema de archivos. Si necesitas un orden específico, ordena la lista `archivos` dentro del script.
 
-## ⚠Limitaciones
+## Limitaciones
 
 - No interpreta HTML: extrae el **código fuente tal cual**, no el texto visible renderizado. Esto es una ventaja para tareas de análisis y replicación de diseño, pero si quieres solo el texto visible, necesitarás algo como `BeautifulSoup` o `html2text`.
 - Archivos muy grandes se cargan en memoria completa (normal para este caso de uso).
