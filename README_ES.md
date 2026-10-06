@@ -1,10 +1,16 @@
+> **🇬🇧 Versión en inglés:** [README.md](README.md) — English version of this document.
+
 # webpage-text-extractor
+
+<p align="center">
+  <img src="images/01-webpage-text-extractor.png" width="180" alt="Icono de Webpage Text Extractor">
+</p>
 
 **Extrae todo el texto de una carpeta — como una página web guardada con `Ctrl + S` en Chrome — y lo concatena en un único archivo `.txt` listo para enviar a un agente de IA.**
 
 [![Python](https://img.shields.io/badge/Python-3.6%2B-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Sin dependencias](https://img.shields.io/badge/dependencias-ninguna-orange.svg)](#requisitos)
+[![Licencia: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+[![Sin dependencias](https://img.shields.io/badge/dependencies-ninguna-orange.svg)](#requisitos)
 
 ---
 
@@ -20,7 +26,7 @@ El flujo es este:
 4. Ejecutas este script sobre esa carpeta.
 5. Obtienes **un solo archivo `.txt`** con el contenido legible de todos los archivos de texto, claramente separado por encabezados.
 
-Ese archivo `.txt` es mucho más fácil de manejar: lo adjuntas a tu agente de IA, lo pegas en un chat o lo procesas como quieras, sin tener que enviar decenas de archivos sueltos.
+Ese archivo `.txt` es mucho más fácil de manejar: lo adjuntas a tu agente de IA, lo pegas en un chat, o lo procesas como quieras, sin tener que enviar decenas de archivos sueltos.
 
 ## Características
 
@@ -50,11 +56,11 @@ python3 --version
 ## Instalación
 
 ```bash
-git clone https://github.com/TU_USUARIO/webpage-text-extractor.git
+git clone https://github.com/wachin/webpage-text-extractor.git
 cd webpage-text-extractor
 ```
 
-No hay nada más que instalar. 
+No hay nada más que instalar.
 
 ## Interfaz gráfica (PyQt6)
 
@@ -91,6 +97,12 @@ python extract_text_gui.py
 - **Internacionalización**: la interfaz está en inglés y todas las cadenas usan `tr()`, lista para traducir con [Qt Linguist](https://doc.qt.io/qt-6/linguist-index.html).
 
 El icono del programa es [`icons/webpage-text-extractor.svg`](icons/webpage-text-extractor.svg), un SVG sencillo (sin filtros ni efectos raster) que puedes editar con [Inkscape](https://inkscape.org/).
+
+### Captura de pantalla
+
+**Pestaña Exclusiones** — 18 selectores, *Mostrar archivos y carpetas ocultos* para revelar elementos como `.git`, y *Agregar varias carpetas…* para rellenar varios selectores de una vez:
+
+![Pestaña Exclusiones de la interfaz gráfica](images/02-exclusions.png)
 
 ### Traducir la interfaz
 
@@ -146,7 +158,7 @@ Descargas/
     └── ...
 ```
 
-Ejecutas:
+Ejecuta:
 
 ```bash
 python extract_text.py "Descargas/12 AI Blogs for Keeping Up With AI Trends in 2026 _ DigitalOcean" -o blog_ai.txt -v
@@ -163,7 +175,7 @@ Análisis completado: 22 archivos de texto, 3 binarios/omitidos.
 El informe se ha guardado en blog_ai.txt.
 ```
 
-Y `blog_ai.txt` queda con este formato:
+Y `blog_ai.txt` quedará con este formato:
 
 ```
 --- Contenido del archivo de texto: Descargas/.../12 AI Blogs ....html ---
@@ -171,7 +183,7 @@ Y `blog_ai.txt` queda con este formato:
 <html lang="en" ...>
 ...
 
---- Contenido del archivo de texto: Descargas/..._files/6994b812b10824a2.css ---
+--- Contenido del archivo de texto: Descargas/..._files/6994b812b10824a2.css
 ...
 
 --- Archivo no de texto: Descargas/..._files/images(6) ---

@@ -2,10 +2,10 @@
 
 # webpage-text-extractor
 
-**Extract all text from a folder — like a web page saved with `Ctrl + S` in Chrome — and concatenate it into a single `.txt` file ready to send to an AI agent.**
+**Extract all text from a folder — like a web page saved with `Ctrl + S` in Chrome o from a git repo — and concatenate it into a single `.txt` file ready to send to an AI agent.**
 
 [![Python](https://img.shields.io/badge/Python-3.6%2B-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![No dependencies](https://img.shields.io/badge/dependencies-none-orange.svg)](#requirements)
 
 ---
@@ -52,7 +52,7 @@ python3 --version
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USER/webpage-text-extractor.git
+git clone https://github.com/wachin/webpage-text-extractor.git
 cd webpage-text-extractor
 ```
 
@@ -83,6 +83,9 @@ The project also includes a multi-platform GUI (Windows, Linux and macOS): [`ext
 python extract_text_gui.py
 ```
 
+![](images/01-webpage-text-extractor.png)
+
+
 ### Features
 
 - **Extraction tab**: selectors for the input folder, the output folder and the output file, with a progress bar and an execution log.
@@ -93,6 +96,12 @@ python extract_text_gui.py
 - **Internationalization**: the interface is written in English and every string uses `tr()`, ready to be translated with [Qt Linguist](https://doc.qt.io/qt-6/linguist-index.html).
 
 The program icon is [`icons/webpage-text-extractor.svg`](icons/webpage-text-extractor.svg), a plain SVG (no filters or raster effects) that you can edit with [Inkscape](https://inkscape.org/).
+
+### Screenshot
+
+**Exclusions tab** — 18 selectors, *Show hidden files and folders* to reveal entries such as `.git`, and *Add multiple folders…* to fill several selectors at once:
+
+![Exclusions tab of the graphical interface](images/02-exclusions.png)
 
 ### Translating the interface
 
