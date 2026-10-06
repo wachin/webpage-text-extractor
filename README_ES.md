@@ -31,9 +31,10 @@ Ese archivo `.txt` es mucho más fácil de manejar: lo adjuntas a tu agente de I
   --- Contenido del archivo de texto: Blog-ejemplo/pagina.html ---
   ```
 - **Cero dependencias**: solo biblioteca estándar de Python. No necesitas `pip install` nada.
-- **Dos versiones**:
+- **Tres versiones + una interfaz gráfica**:
   - `extract_text.py` — versión con argumentos de línea de comandos (recomendada).
   - `extract_text_simple.py` — versión original mínima, editas dos variables y listo.
+  - `extract_text_gui.py` — interfaz gráfica con PyQt6 (ver [Interfaz gráfica](#interfaz-gráfica-pyqt6)).
 
 ## Requisitos
 
@@ -54,6 +55,51 @@ cd webpage-text-extractor
 ```
 
 No hay nada más que instalar. 
+
+## Interfaz gráfica (PyQt6)
+
+El proyecto también incluye una interfaz gráfica multiplataforma (Windows, Linux y macOS): [`extract_text_gui.py`](extract_text_gui.py).
+
+### Requisitos
+
+- Python **3.8 o superior**.
+- PyQt6:
+
+  ```bash
+  pip install PyQt6
+  ```
+
+- En **Linux**, instala las traducciones de Qt para que los diálogos estándar (*Abrir archivo / Guardar archivo*, etc.) aparezcan automáticamente en el idioma del sistema:
+
+  ```bash
+  sudo apt install qt6-translations-l10n
+  ```
+
+### Ejecutar la interfaz
+
+```bash
+python extract_text_gui.py
+```
+
+### Características
+
+- **Pestaña Extracción**: selectores de carpeta de entrada, carpeta de salida y archivo de salida, con barra de progreso y registro de ejecución.
+- **Pestaña Exclusiones**: 18 selectores para excluir directorios o archivos de la extracción (cada uno puede apuntar a un directorio o a un archivo). **Agregar varias carpetas…** permite seleccionar varias carpetas de una vez y rellena los selectores automáticamente, y marcar **Mostrar archivos y carpetas ocultos** revela elementos como `.git` que el sistema oculta por defecto (también se extraen, así que normalmente querrás excluirlos).
+- **Ayuda → Acerca de**: diálogo de información para el desarrollador — icono del programa a la izquierda, texto a la derecha — con enlace de correo y enlace web clicables (abren el cliente de correo y el navegador predeterminados).
+- **Temas claro y oscuro**: _Ver → Tema_.
+- **Multiplataforma**: funciona en Windows, Linux y macOS; el estilo `Fusion` garantiza el mismo aspecto y temas funcionales en todos.
+- **Internacionalización**: la interfaz está en inglés y todas las cadenas usan `tr()`, lista para traducir con [Qt Linguist](https://doc.qt.io/qt-6/linguist-index.html).
+
+El icono del programa es [`icons/webpage-text-extractor.svg`](icons/webpage-text-extractor.svg), un SVG sencillo (sin filtros ni efectos raster) que puedes editar con [Inkscape](https://inkscape.org/).
+
+### Traducir la interfaz
+
+```bash
+pylupdate6 extract_text_gui.py -ts translations/webpage-text-extractor.ts   # extraer las cadenas
+lrelease translations/webpage-text-extractor.ts                            # compilar el .qm
+```
+
+Coloca el archivo `webpage-text-extractor_<locale>.qm` resultante (por ejemplo `webpage-text-extractor_es.qm`) en la carpeta `translations/` y el programa lo cargará automáticamente al iniciar.
 
 ## Uso
 

@@ -33,9 +33,10 @@ That `.txt` file is much easier to handle: you attach it to your AI agent, paste
   --- Text file content: Blog-example/page.html ---
   ```
 - **Zero dependencies**: only Python standard library. No `pip install` needed.
-- **Two versions**:
+- **Two versions + a GUI**:
   - `extract_text.py` — version with command-line arguments (recommended).
   - `extract_text_simple.py` — original minimal version, edit two variables and run.
+  - `extract_text_gui.py` — graphical interface with PyQt6 (see [Graphical user interface](#graphical-user-interface-pyqt6)).
 
 ## Requirements
 
@@ -56,6 +57,51 @@ cd webpage-text-extractor
 ```
 
 Nothing else to install.
+
+## Graphical user interface (PyQt6)
+
+The project also includes a multi-platform GUI (Windows, Linux and macOS): [`extract_text_gui.py`](extract_text_gui.py).
+
+### Requirements
+
+- Python **3.8 or higher**.
+- PyQt6:
+
+  ```bash
+  pip install PyQt6
+  ```
+
+- On **Linux**, install Qt's translations so that the standard dialogs (*Open file / Save file*, etc.) automatically appear in your system language:
+
+  ```bash
+  sudo apt install qt6-translations-l10n
+  ```
+
+### Run the GUI
+
+```bash
+python extract_text_gui.py
+```
+
+### Features
+
+- **Extraction tab**: selectors for the input folder, the output folder and the output file, with a progress bar and an execution log.
+- **Exclusions tab**: 18 selectors to exclude directories or files from the extraction (each one can point to a directory or to a file). **Add multiple folders…** selects several folders at once and fills the selectors automatically, and ticking **Show hidden files and folders** reveals entries such as `.git` that the system hides by default (they are extracted too, so you will usually want to exclude them).
+- **Help → About**: developer information dialog — program icon on the left, text on the right — with a clickable email link (opens your default email client) and website link (opens your default browser).
+- **Light and dark themes**: _View → Theme_.
+- **Multiplatform**: runs on Windows, Linux and macOS; the `Fusion` style guarantees the same look and working themes everywhere.
+- **Internationalization**: the interface is written in English and every string uses `tr()`, ready to be translated with [Qt Linguist](https://doc.qt.io/qt-6/linguist-index.html).
+
+The program icon is [`icons/webpage-text-extractor.svg`](icons/webpage-text-extractor.svg), a plain SVG (no filters or raster effects) that you can edit with [Inkscape](https://inkscape.org/).
+
+### Translating the interface
+
+```bash
+pylupdate6 extract_text_gui.py -ts translations/webpage-text-extractor.ts   # extract the strings
+lrelease translations/webpage-text-extractor.ts                            # compile the .qm
+```
+
+Place the resulting `webpage-text-extractor_<locale>.qm` file (for example `webpage-text-extractor_es.qm`) in the `translations/` folder and the program will load it automatically at startup.
 
 ## Usage
 
