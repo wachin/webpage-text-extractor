@@ -20,6 +20,12 @@ Features
 * The interface is written in English and every user-visible string uses
   tr(), so the program can be translated with Qt Linguist.
 * Multi-platform: Windows, Linux and macOS.
+* Self-contained: a single file with no dependency on extract_text.py, so
+  it can be copied to any folder or repository and run from there.
+* Quick setup: when launched from a new location (the file copied to
+  another repository), a small dialog offers to pick the input folder
+  from the folders of that location; the output file gets the
+  <folder>_src.txt name and the output folder is the location itself.
 
 Requirements
 ------------
@@ -98,8 +104,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from extract_text import es_archivo_texto
-
 APP_NAME = "Webpage Text Extractor"
 APP_VERSION = "1.0.0"
 ORG_NAME = "wachin"
@@ -109,6 +113,32 @@ NUM_EXCLUSION_SELECTORS = 18
 BASE_DIR = Path(__file__).resolve().parent
 ICON_PATH = BASE_DIR / "icons" / "webpage-text-extractor.svg"
 TRANSLATIONS_DIR = BASE_DIR / "translations"
+
+# Extensions that are usually binary: no point in reading them as text.
+BINARY_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg", ".bmp",
+    ".mp4", ".webm", ".mp3", ".wav", ".ogg", ".m4a",
+    ".woff", ".woff2", ".ttf", ".otf", ".eot",
+    ".zip", ".gz", ".br", ".rar", ".7z", ".pdf", ".exe", ".dll", ".so",
+}
+
+
+def is_text_file(path: str) -> bool:
+    """Return True when the file can be read as UTF-8 text.
+
+    Same detection rule used by extract_text.py, kept here so that this
+    file has no dependencies beyond PyQt6 and can be copied to any folder
+    or repository.
+    """
+    extension = os.path.splitext(path)[1].lower()
+    if extension in BINARY_EXTENSIONS:
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            handle.read()
+        return True
+    except (UnicodeDecodeError, OSError):
+        return False
 
 # ---------------------------------------------------------------------------
 # Themes (light / dark)
@@ -268,6 +298,95 @@ class AboutWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# Quick setup (first run in a new location)
+# ---------------------------------------------------------------------------
+
+class QuickSetupDialog(QDialog):
+    """Small dialog shown when the program starts in a new location.
+
+    It displays the folder where the program file lives and lets the user
+    choose the input folder among the folders of that location.
+    """
+
+    def __init__(self, launch_dir: str, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._launch_dir = launch_dir
+        self.setWindowTitle(self.tr("Quick setup"))
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        info = QLabel(
+            self.tr("The program was opened from a new location:")
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        root_edit = QLineEdit(launch_dir)
+        root_edit.setReadOnly(True)
+        layout.addWidget(root_edit)
+
+        hint = QLabel(
+            self.tr(
+                "Select the input folder among the folders of this "
+                "location. The output file will be named <folder>_src.txt "
+                "and the output folder will be this location itself."
+            )
+        )
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        row = QHBoxLayout()
+        self.input_edit = QLineEdit()
+        self.input_edit.setReadOnly(True)
+        self.input_edit.setPlaceholderText(self.tr("Input folder: not selected"))
+        button = QPushButton(self.tr("Select input folder…"))
+        button.clicked.connect(self._select_input_folder)
+        row.addWidget(self.input_edit, 1)
+        row.addWidget(button)
+        layout.addLayout(row)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(
+            self.tr("Apply")
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(
+            self.tr("Cancel")
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.resize(520, 260)
+
+    def selected_input_folder(self) -> str:
+        """Return the chosen input folder (empty when none)."""
+        return self.input_edit.text().strip()
+
+    def _select_input_folder(self) -> None:
+        path = QFileDialog.getExistingDirectory(
+            self, self.tr("Select input folder"), self._launch_dir
+        )
+        if path:
+            self.input_edit.setText(path)
+
+    def accept(self) -> None:  # noqa: N802 (Qt API)
+        if not self.selected_input_folder():
+            QMessageBox.information(
+                self,
+                self.tr("Quick setup"),
+                self.tr(
+                    "Select the input folder first, or cancel the setup."
+                ),
+            )
+            return
+        super().accept()
+
+
+# ---------------------------------------------------------------------------
 # Background extraction worker
 # ---------------------------------------------------------------------------
 
@@ -416,7 +535,7 @@ class ExtractionWorker(QThread):
                         self.log_message.emit(
                             self.tr("[excluded] {path}").format(path=path)
                         )
-                    elif es_archivo_texto(path):
+                    elif is_text_file(path):
                         try:
                             with open(path, "r", encoding="utf-8") as handle:
                                 content = handle.read()
@@ -1022,6 +1141,46 @@ class MainWindow(QMainWindow):
             if base:
                 self.output_name_edit.setText(f"{base}_src.txt")
 
+    # -- quick setup (new location) -----------------------------------------
+
+    def quick_setup_if_needed(self) -> None:
+        """Offer a quick setup when the program runs from a new location.
+
+        Every time extract_text_gui.py is launched from a directory other
+        than the last known one (for example after copying the file into
+        a new repository), a small dialog lets the user choose the input
+        folder among the folders of that location; the output file is
+        named <folder>_src.txt and the output folder becomes the new
+        location itself.
+        """
+        current = str(BASE_DIR)
+        last = self.settings.value("app/launch_dir", "", type=str)
+        # Remember the location whether the setup is applied or skipped,
+        # so the dialog appears only when the location really changes.
+        self.settings.setValue("app/launch_dir", current)
+        if os.path.normcase(os.path.normpath(last)) == os.path.normcase(
+            os.path.normpath(current)
+        ):
+            return
+
+        dialog = QuickSetupDialog(current, self)
+        if not dialog.exec():
+            return
+        input_path = dialog.selected_input_folder()
+        if not input_path:
+            return
+        self.input_edit.setText(input_path)
+        self.output_edit.setText(current)
+        base = os.path.basename(os.path.normpath(input_path))
+        if base:
+            self.output_name_edit.setText(f"{base}_src.txt")
+            self._output_name_custom = False
+        self.statusBar().showMessage(
+            self.tr("Quick setup applied: input folder {folder}").format(
+                folder=input_path
+            )
+        )
+
     # -- extraction control ------------------------------------------------
 
     def _append_log(self, message: str) -> None:
@@ -1204,6 +1363,8 @@ def main() -> int:
 
     window = MainWindow()
     window.show()
+    # Offer the quick setup when the program runs from a new location.
+    window.quick_setup_if_needed()
     return app.exec()
 
 

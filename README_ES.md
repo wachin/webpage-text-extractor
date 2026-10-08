@@ -64,7 +64,7 @@ No hay nada más que instalar.
 
 ## Interfaz gráfica (PyQt6)
 
-El proyecto también incluye una interfaz gráfica multiplataforma (Windows, Linux y macOS): [`extract_text_gui.py`](extract_text_gui.py).
+El proyecto también incluye una interfaz gráfica multiplataforma (Windows, Linux y macOS): [`extract_text_gui.py`](extract_text_gui.py). Es un **archivo único y autónomo** — no depende de `extract_text.py` —, así que puedes copiarlo a cualquier otro repositorio o carpeta y ejecutarlo allí (la carpeta `icons/` es opcional: solo aporta el icono del programa).
 
 ### Requisitos
 
@@ -95,6 +95,7 @@ python extract_text_gui.py
 - **Temas claro y oscuro**: _Ver → Tema_.
 - **Multiplataforma**: funciona en Windows, Linux y macOS; el estilo `Fusion` garantiza el mismo aspecto y temas funcionales en todos.
 - **Internacionalización**: la interfaz está en inglés y todas las cadenas usan `tr()`, lista para traducir con [Qt Linguist](https://doc.qt.io/qt-6/linguist-index.html).
+- **Configuración rápida**: cuando el programa se lanza desde una nueva ubicación (por ejemplo, tras copiar `extract_text_gui.py` a otro repositorio), un pequeño diálogo permite elegir la carpeta de entrada entre las carpetas de esa ubicación; el archivo de salida se llama `<carpeta>_src.txt` y la carpeta de salida es la propia ubicación.
 
 El icono del programa es [`icons/webpage-text-extractor.svg`](icons/webpage-text-extractor.svg), un SVG sencillo (sin filtros ni efectos raster) que puedes editar con [Inkscape](https://inkscape.org/).
 
