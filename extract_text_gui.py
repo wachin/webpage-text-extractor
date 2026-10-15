@@ -26,6 +26,11 @@ Features
   another repository), a small dialog offers to pick the input folder
   from the folders of that location; the output file gets the
   <folder>_src.txt name and the output folder is the location itself.
+* Source and destination tree: four Input folder selectors with their
+  Browse... button; the contents of those folders are written at the
+  beginning of the output file like the tree command — names only — and
+  the files inside those folders are not extracted (only their names
+  appear in the listing).
 
 Requirements
 ------------
@@ -109,6 +114,7 @@ APP_VERSION = "1.0.0"
 ORG_NAME = "wachin"
 APP_ID = "webpage-text-extractor"
 NUM_EXCLUSION_SELECTORS = 18
+NUM_TREE_SELECTORS = 4
 
 BASE_DIR = Path(__file__).resolve().parent
 ICON_PATH = BASE_DIR / "icons" / "webpage-text-extractor.svg"
@@ -412,6 +418,7 @@ class ExtractionWorker(QThread):
         input_dir: str,
         output_file: str,
         exclusions: list,
+        tree_folders: Optional[list] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -419,6 +426,8 @@ class ExtractionWorker(QThread):
         self.output_file = output_file
         # List of (path, is_directory).
         self.exclusions = exclusions
+        # Folders whose tree-style listing goes into the report.
+        self.tree_folders = tree_folders or []
 
     # -- helpers -----------------------------------------------------------
 
@@ -468,6 +477,52 @@ class ExtractionWorker(QThread):
             )
         return total
 
+    def _tree_lines(self, root: str) -> list:
+        """Return the contents of `root` as tree-style lines (names only)."""
+        lines: list = []
+        truncated = False
+
+        def walk(directory: str, prefix: str, depth: int) -> None:
+            nonlocal truncated
+            if depth > 8 or truncated:
+                return
+            try:
+                with os.scandir(directory) as scan:
+                    entries = sorted(
+                        scan,
+                        key=lambda entry: (
+                            not entry.is_dir(follow_symlinks=False),
+                            entry.name.lower(),
+                        ),
+                    )
+            except OSError:
+                lines.append(prefix + self.tr("[cannot read this folder]"))
+                return
+            total = len(entries)
+            for position, entry in enumerate(entries):
+                if len(lines) > 10000:
+                    truncated = True
+                    return
+                last = position == total - 1
+                is_directory = entry.is_dir(follow_symlinks=False)
+                lines.append(
+                    prefix
+                    + ("└── " if last else "├── ")
+                    + entry.name
+                    + ("/" if is_directory else "")
+                )
+                if is_directory:
+                    walk(
+                        entry.path,
+                        prefix + ("    " if last else "│   "),
+                        depth + 1,
+                    )
+
+        walk(root, "", 0)
+        if truncated:
+            lines.append(self.tr("… (listing truncated)"))
+        return lines
+
     # -- main work ---------------------------------------------------------
 
     def run(self) -> None:
@@ -494,6 +549,13 @@ class ExtractionWorker(QThread):
             os.makedirs(output_dir, exist_ok=True)
 
         excluded_dirs, excluded_files = self._compile_exclusions()
+        # Folders chosen for the "Source and destination tree" contribute
+        # only their tree listing: their file contents are never extracted.
+        for folder in self.tree_folders:
+            normalized = self._normalize(folder)
+            if normalized not in excluded_dirs:
+                excluded_dirs.append(normalized)
+        tree_dirs = {self._normalize(folder) for folder in self.tree_folders}
         total = self._count_files(excluded_dirs, excluded_files)
 
         processed = 0
@@ -503,6 +565,25 @@ class ExtractionWorker(QThread):
         cancelled = False
 
         with open(self.output_file, "w", encoding="utf-8") as report:
+            # The directory trees come first (like the tree command,
+            # names only — never the code of the files).
+            for folder in self.tree_folders:
+                if os.path.isdir(folder):
+                    report.write(
+                        self.tr("--- Directory tree: {path} ---").format(
+                            path=folder
+                        )
+                        + "\n"
+                    )
+                    report.write("\n".join(self._tree_lines(folder)) + "\n")
+                else:
+                    report.write(
+                        self.tr("[skipped, not a folder: {path}]").format(
+                            path=folder
+                        )
+                        + "\n"
+                    )
+
             for root, subdirs, names in os.walk(self.input_dir):
                 if cancelled:
                     break
@@ -513,11 +594,18 @@ class ExtractionWorker(QThread):
                     full_path = os.path.join(root, name)
                     if self._is_excluded(full_path, excluded_dirs, excluded_files):
                         excluded_count += 1
-                        self.log_message.emit(
-                            self.tr("[excluded directory] {path}").format(
-                                path=full_path
+                        if self._normalize(full_path) in tree_dirs:
+                            self.log_message.emit(
+                                self.tr(
+                                    "[tree folder — contents not extracted] {path}"
+                                ).format(path=full_path)
                             )
-                        )
+                        else:
+                            self.log_message.emit(
+                                self.tr("[excluded directory] {path}").format(
+                                    path=full_path
+                                )
+                            )
                     else:
                         kept_dirs.append(name)
                 subdirs[:] = kept_dirs
@@ -730,6 +818,41 @@ class MainWindow(QMainWindow):
         group.setLayout(grid)
         layout.addWidget(group)
 
+        # Source and destination tree (a listing like the tree command).
+        tree_group = QGroupBox(self.tr("Source and destination tree"))
+        tree_layout = QVBoxLayout()
+        tree_hint = QLabel(
+            self.tr(
+                "The contents of these folders are written at the beginning "
+                "of the output file, like the tree command (names only), "
+                "and the files inside them are not extracted."
+            )
+        )
+        tree_hint.setWordWrap(True)
+        tree_layout.addWidget(tree_hint)
+        tree_grid = QGridLayout()
+        tree_grid.setColumnStretch(1, 1)
+        tree_grid.setHorizontalSpacing(8)
+        tree_grid.setVerticalSpacing(6)
+        self.tree_edits: list = []
+        for row in range(NUM_TREE_SELECTORS):
+            label = QLabel(self.tr("Input folder {n}:").format(n=row + 1))
+            edit = QLineEdit()
+            edit.setReadOnly(True)
+            edit.setPlaceholderText(self.tr("Folder to list"))
+            label.setBuddy(edit)
+            button = QPushButton(self.tr("Browse…"))
+            button.clicked.connect(
+                lambda checked=False, index=row: self._browse_tree_folder(index)
+            )
+            tree_grid.addWidget(label, row, 0)
+            tree_grid.addWidget(edit, row, 1)
+            tree_grid.addWidget(button, row, 2)
+            self.tree_edits.append(edit)
+        tree_layout.addLayout(tree_grid)
+        tree_group.setLayout(tree_layout)
+        layout.addWidget(tree_group)
+
         # Run controls.
         run_row = QHBoxLayout()
         self.run_button = QPushButton(self.tr("Extract text"))
@@ -849,23 +972,31 @@ class MainWindow(QMainWindow):
                 lambda checked=False, row=index: self._clear_exclusion(row)
             )
 
-            grid.addWidget(number, index, 0)
-            grid.addWidget(edit, index, 1)
-            grid.addWidget(button, index, 2)
-            grid.addWidget(clear, index, 3)
+            # Row 0 is the header; the selectors start at row 1.
+            grid.addWidget(number, index + 1, 0)
+            grid.addWidget(edit, index + 1, 1)
+            grid.addWidget(button, index + 1, 2)
+            grid.addWidget(clear, index + 1, 3)
             self.excl_edits.append(edit)
             self.excl_clear_buttons.append(clear)
 
         grid.setColumnStretch(1, 1)
 
+        # "Clear All" above the column of the Clear buttons (header row).
+        self.header_clear_all_button = QPushButton(self.tr("Clear All"))
+        self.header_clear_all_button.setToolTip(
+            self.tr("Clear all selectors at once")
+        )
+        self.header_clear_all_button.clicked.connect(self._clear_all_exclusions)
+        grid.addWidget(
+            self.header_clear_all_button, 0, 3, Qt.AlignmentFlag.AlignRight
+        )
+
         bottom = QHBoxLayout()
-        button_clear_all = QPushButton(self.tr("Clear all"))
-        button_clear_all.clicked.connect(self._clear_all_exclusions)
-        bottom.addWidget(button_clear_all)
         bottom.addStretch(1)
         self.excl_status = QLabel()
         bottom.addWidget(self.excl_status)
-        grid.addLayout(bottom, NUM_EXCLUSION_SELECTORS, 0, 1, 4)
+        grid.addLayout(bottom, NUM_EXCLUSION_SELECTORS + 1, 0, 1, 4)
 
         group.setLayout(grid)
         layout.addWidget(group)
@@ -1141,6 +1272,19 @@ class MainWindow(QMainWindow):
             if base:
                 self.output_name_edit.setText(f"{base}_src.txt")
 
+    # -- tree preview (Source and destination tree) --------------------------
+
+    def _browse_tree_folder(self, index: int) -> None:
+        """Open the folder picker of one of the tree selectors."""
+        start = self._start_directory(
+            self.tree_edits[index].text() or self.input_edit.text()
+        )
+        path = QFileDialog.getExistingDirectory(
+            self, self.tr("Select folder to list"), start
+        )
+        if path:
+            self.tree_edits[index].setText(path)
+
     # -- quick setup (new location) -----------------------------------------
 
     def quick_setup_if_needed(self) -> None:
@@ -1242,8 +1386,13 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(self.tr("Extracting…"))
         self._set_running(True)
 
+        tree_folders = [
+            edit.text().strip()
+            for edit in self.tree_edits
+            if edit.text().strip()
+        ]
         self.worker = ExtractionWorker(
-            input_dir, output_file, self._collect_exclusions()
+            input_dir, output_file, self._collect_exclusions(), tree_folders
         )
         self.worker.log_message.connect(self._append_log)
         self.worker.progress_changed.connect(self.progress.setValue)

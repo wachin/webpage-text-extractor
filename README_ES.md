@@ -96,6 +96,7 @@ python extract_text_gui.py
 - **Multiplataforma**: funciona en Windows, Linux y macOS; el estilo `Fusion` garantiza el mismo aspecto y temas funcionales en todos.
 - **Internacionalización**: la interfaz está en inglés y todas las cadenas usan `tr()`, lista para traducir con [Qt Linguist](https://doc.qt.io/qt-6/linguist-index.html).
 - **Configuración rápida**: cuando el programa se lanza desde una nueva ubicación (por ejemplo, tras copiar `extract_text_gui.py` a otro repositorio), un pequeño diálogo permite elegir la carpeta de entrada entre las carpetas de esa ubicación; el archivo de salida se llama `<carpeta>_src.txt` y la carpeta de salida es la propia ubicación.
+- **Sección "Source and destination tree"**: debajo de *Source and destination*, cuatro selectores de carpeta de entrada (*Input folder*) con su botón *Browse…*; el contenido de esas carpetas se escribe al **principio del archivo `.txt` de salida** como el comando `tree` (solo nombres), y los archivos dentro de esas carpetas **no se extraen** — solo aparecen sus nombres en el listado.
 
 El icono del programa es [`icons/webpage-text-extractor.svg`](icons/webpage-text-extractor.svg), un SVG sencillo (sin filtros ni efectos raster) que puedes editar con [Inkscape](https://inkscape.org/).
 
