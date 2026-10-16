@@ -22,6 +22,8 @@ Features
 * Multi-platform: Windows, Linux and macOS.
 * Self-contained: a single file with no dependency on extract_text.py, so
   it can be copied to any folder or repository and run from there.
+* 16 interface languages: en_US, es_ES, de_DE, fr_FR, fr_CA, id_ID,
+  ja_JP, ko, pt_BR, pt_PT, th_TH, tr_TR, ru_RU, zh_CN, zh_TW, zh_HK.
 * Quick setup: when launched from a new location (the file copied to
   another repository), a small dialog offers to pick the input folder
   from the folders of that location; the output file gets the
@@ -753,10 +755,21 @@ class MainWindow(QMainWindow):
 
         # Application's own translation (produced with Qt Linguist).
         self.app_translator = QTranslator()
+        loaded = False
         for name in [f"{APP_ID}_{locale_name}", f"{APP_ID}_{locale_short}"]:
             if self.app_translator.load(name, str(TRANSLATIONS_DIR)):
-                QApplication.installTranslator(self.app_translator)
+                loaded = True
                 break
+        if not loaded and TRANSLATIONS_DIR.is_dir():
+            # Fall back to any regional variant of the same language
+            # (for example es_EC -> es_ES, fr_BE -> fr_FR, pt_AO -> pt_PT).
+            matches = sorted(
+                TRANSLATIONS_DIR.glob(f"{APP_ID}_{locale_short}_*.qm")
+            )
+            if matches:
+                loaded = self.app_translator.load(str(matches[0]))
+        if loaded:
+            QApplication.installTranslator(self.app_translator)
 
     # -- user interface ----------------------------------------------------
 

@@ -94,7 +94,7 @@ python extract_text_gui.py
 - **Ayuda → Acerca de**: diálogo de información para el desarrollador — icono del programa a la izquierda, texto a la derecha — con enlace de correo y enlace web clicables (abren el cliente de correo y el navegador predeterminados).
 - **Temas claro y oscuro**: _Ver → Tema_.
 - **Multiplataforma**: funciona en Windows, Linux y macOS; el estilo `Fusion` garantiza el mismo aspecto y temas funcionales en todos.
-- **Internacionalización**: la interfaz está en inglés y todas las cadenas usan `tr()`, lista para traducir con [Qt Linguist](https://doc.qt.io/qt-6/linguist-index.html).
+- **Internacionalización**: la interfaz está en inglés y todas las cadenas usan `tr()`, lista para traducir con [Qt Linguist](https://doc.qt.io/qt-6/linguist-index.html). Las traducciones están disponibles para 16 idiomas: `en_US` (idioma fuente), `es_ES`, `de_DE`, `fr_FR`, `fr_CA`, `id_ID`, `ja_JP`, `ko`, `pt_BR`, `pt_PT`, `th_TH`, `tr_TR`, `ru_RU`, `zh_CN`, `zh_TW` y `zh_HK` (ver [Traducir la interfaz](#traducir-la-interfaz)).
 - **Configuración rápida**: cuando el programa se lanza desde una nueva ubicación (por ejemplo, tras copiar `extract_text_gui.py` a otro repositorio), un pequeño diálogo permite elegir la carpeta de entrada entre las carpetas de esa ubicación; el archivo de salida se llama `<carpeta>_src.txt` y la carpeta de salida es la propia ubicación.
 - **Sección "Source and destination tree"**: debajo de *Source and destination*, cuatro selectores de carpeta de entrada (*Input folder*) con su botón *Browse…*; el contenido de esas carpetas se escribe al **principio del archivo `.txt` de salida** como el comando `tree` (solo nombres), y los archivos dentro de esas carpetas **no se extraen** — solo aparecen sus nombres en el listado.
 
@@ -108,12 +108,27 @@ El icono del programa es [`icons/webpage-text-extractor.svg`](icons/webpage-text
 
 ### Traducir la interfaz
 
+Las cadenas de la interfaz se extraen de `extract_text_gui.py` en el archivo base
+`translations/webpage-text-extractor.ts` y se traducen para las 16 configuraciones
+regionales admitidas:
+
+`en_US` (idioma fuente), `es_ES`, `de_DE`, `fr_FR`, `fr_CA`, `id_ID`, `ja_JP`,
+`ko`, `pt_BR`, `pt_PT`, `th_TH`, `tr_TR`, `ru_RU`, `zh_CN`, `zh_TW`, `zh_HK`.
+
+Los archivos `.ts` por configuración regional viven en
+`translations/<locale>/` y se generan (y opcionalmente se compilan a `.qm`
+con `lrelease`) con:
+
 ```bash
-pylupdate6 extract_text_gui.py -ts translations/webpage-text-extractor.ts   # extraer las cadenas
-lrelease translations/webpage-text-extractor.ts                            # compilar el .qm
+python3 translations/generate_translations.py            # escribe los archivos .ts
+python3 translations/generate_translations.py --compile  # escribe .ts y compila .qm
 ```
 
-Coloca el archivo `webpage-text-extractor_<locale>.qm` resultante (por ejemplo `webpage-text-extractor_es.qm`) en la carpeta `translations/` y el programa lo cargará automáticamente al iniciar.
+Coloca (o regenera) el archivo `webpage-text-extractor_<locale>.qm` resultante
+(por ejemplo `webpage-text-extractor_es.qm`) en la carpeta `translations/` y el
+programa lo cargará automáticamente al iniciar. El cargador también recurre a la
+variante solo-idioma (por ejemplo `es` para `es_EC`) y a cualquier variante
+regional del mismo idioma.
 
 ## Uso
 
