@@ -58,6 +58,77 @@ cd webpage-text-extractor
 
 Nothing else to install.
 
+## Windows 10 quick start
+
+These steps were tested on **Windows 10** with **Python 3.12** installed and
+added to the system `PATH`.
+
+1. Open **PowerShell** in the project folder:
+
+   ```powershell
+   cd "C:\path\to\webpage-text-extractor"
+   ```
+
+2. Check that Python is available:
+
+   ```powershell
+   python --version
+   ```
+
+   If `python` is not recognized, use `py --version` instead (or the full
+   path to `python.exe`).
+
+3. Install the GUI dependency (only `extract_text_gui.py` needs it):
+
+   ```powershell
+   python -m pip install --upgrade PyQt6
+   ```
+
+4. Start the graphical interface:
+
+   ```powershell
+   python extract_text_gui.py
+   ```
+
+   On first launch a **Quick setup** dialog appears: select the input folder,
+   click **Apply**, then click **Extract text**.
+
+   To start the GUI without a console window, use `pythonw`:
+
+   ```powershell
+   pythonw extract_text_gui.py
+   ```
+
+5. Run the command-line version (no PyQt6 required):
+
+   ```powershell
+   python extract_text.py "C:\path\to\saved-page" -o "C:\path\to\report.txt" -v
+   ```
+
+   Keep the output file **outside** the input folder when using the
+   command-line version: unlike the GUI, it does not exclude its own report
+   from the scan.
+
+### Optional: desktop shortcut
+
+1. Right-click the desktop and choose **New → Shortcut**.
+2. Enter the path to `pythonw.exe` followed by the script path, for example:
+
+   ```text
+   C:\Users\<you>\AppData\Local\Programs\Python\Python312\pythonw.exe "C:\path\to\webpage-text-extractor\extract_text_gui.py"
+   ```
+
+3. Set **Start in** to the project folder and name the shortcut
+   **Webpage Text Extractor**.
+
+### Troubleshooting
+
+- `ModuleNotFoundError: No module named 'PyQt6'` — install it with
+  `python -m pip install --upgrade PyQt6`.
+- `'python' is not recognized` — use `py` instead of `python`, or call
+  `python.exe` by its full path. Reinstalling Python with **Add Python to
+  PATH** checked also fixes this.
+
 ## Graphical user interface (PyQt6)
 
 The project also includes a multi-platform GUI (Windows, Linux and macOS): [`extract_text_gui.py`](extract_text_gui.py). It is a **single self-contained file** — it does not depend on `extract_text.py` — so you can copy it to any other repository or folder and run it there (the `icons/` folder is optional: it only provides the program icon).
