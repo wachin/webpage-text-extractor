@@ -154,6 +154,34 @@ The project also includes a multi-platform GUI (Windows, Linux and macOS): [`ext
 python extract_text_gui.py
 ```
 
+### Run the interface in another language
+
+The GUI automatically loads the translation that matches the system language.
+To run it in English without changing the system settings, set `LANG` for that
+terminal session only:
+
+**PowerShell (Windows):**
+
+```powershell
+$env:LANG='en_US.UTF-8'; python .\extract_text_gui.py
+```
+
+**cmd.exe (Windows):**
+
+```bat
+set LANG=en_US.UTF-8 && python extract_text_gui.py
+```
+
+**Linux/macOS:**
+
+```bash
+LANG=en_US.UTF-8 python extract_text_gui.py
+```
+
+Only the current terminal session is affected. In PowerShell, run
+`Remove-Item Env:LANG` to restore the previous language. The same approach works
+with any available locale, for example `es_ES.UTF-8` for Spanish.
+
 ![](images/01-webpage-text-extractor.png)
 
 
@@ -167,6 +195,9 @@ python extract_text_gui.py
   - **Ignore completely** — the file does not appear in the report at all.
 
   Exact file-name rules win over suffix rules, and the longest suffix wins (`.min.js` over `.js`); a later rule overrides an earlier rule with the same pattern. Rules are stored between sessions. The default rules keep `.svg`, `.map`, `.min.js`, `.min.css`, lock files, `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml` and `go.sum` as *Mention only*; **Add common rules** restores them and **Clear all rules** removes them. Choosing *Extract content* also overrides the built-in binary detection, so you can include an SVG's code if you really need it.
+
+  ![Extension filter tab of the graphical interface](images/03-Extension-filter.png)
+
 - **Help → About**: developer information dialog — program icon on the left, text on the right — with a clickable email link (opens your default email client) and website link (opens your default browser).
 - **Light and dark themes**: _View → Theme_.
 - **Multiplatform**: runs on Windows, Linux and macOS; the `Fusion` style guarantees the same look and working themes everywhere.

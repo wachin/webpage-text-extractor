@@ -87,6 +87,35 @@ El proyecto también incluye una interfaz gráfica multiplataforma (Windows, Lin
 python extract_text_gui.py
 ```
 
+### Ejecutar la interfaz en otro idioma
+
+La interfaz carga automáticamente la traducción que coincide con el idioma del
+sistema. Para abrirla en inglés sin cambiar la configuración del sistema,
+define `LANG` solo para esa sesión de terminal:
+
+**PowerShell (Windows):**
+
+```powershell
+$env:LANG='en_US.UTF-8'; python .\extract_text_gui.py
+```
+
+**cmd.exe (Windows):**
+
+```bat
+set LANG=en_US.UTF-8 && python extract_text_gui.py
+```
+
+**Linux/macOS:**
+
+```bash
+LANG=en_US.UTF-8 python extract_text_gui.py
+```
+
+Solo afecta a la sesión de terminal actual. En PowerShell, ejecuta
+`Remove-Item Env:LANG` para recuperar el idioma anterior. El mismo método
+funciona con cualquier idioma disponible, por ejemplo `es_ES.UTF-8` para
+español.
+
 ### Características
 
 - **Pestaña Extracción**: selectores de carpeta de entrada, carpeta de salida y archivo de salida, con barra de progreso y registro de ejecución.
@@ -97,6 +126,9 @@ python extract_text_gui.py
   - **Ignorar por completo** — el archivo no aparece en el informe.
 
   Las reglas de nombre exacto tienen prioridad sobre las de extensión, y gana la extensión más larga (`.min.js` sobre `.js`); una regla posterior sustituye a otra anterior con el mismo patrón. Las reglas se guardan entre sesiones. Las reglas predeterminadas dejan como *Solo mencionar* `.svg`, `.map`, `.min.js`, `.min.css`, archivos de bloqueo, `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml` y `go.sum`; **Agregar reglas comunes** las restaura y **Borrar todas las reglas** las elimina. Elegir *Extraer contenido* también anula la detección integrada de binarios, así que puedes incluir el código de un SVG si de verdad lo necesitas.
+
+  ![Pestaña Filtro por extensión de la interfaz gráfica](images/03-Extension-filter.png)
+
 - **Ayuda → Acerca de**: diálogo de información para el desarrollador — icono del programa a la izquierda, texto a la derecha — con enlace de correo y enlace web clicables (abren el cliente de correo y el navegador predeterminados).
 - **Temas claro y oscuro**: _Ver → Tema_.
 - **Multiplataforma**: funciona en Windows, Linux y macOS; el estilo `Fusion` garantiza el mismo aspecto y temas funcionales en todos.

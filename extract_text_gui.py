@@ -1168,8 +1168,8 @@ class MainWindow(QMainWindow):
         filter_header.setSectionResizeMode(
             1, QHeaderView.ResizeMode.ResizeToContents
         )
-        self.filter_table.setMinimumHeight(170)
-        filter_layout.addWidget(self.filter_table)
+        self.filter_table.setMinimumHeight(220)
+        filter_layout.addWidget(self.filter_table, 1)
 
         filter_buttons = QHBoxLayout()
         self.add_filter_button = QPushButton(self.tr("Add rule"))
@@ -1206,11 +1206,10 @@ class MainWindow(QMainWindow):
         filter_layout.addLayout(filter_buttons)
 
         filter_group.setLayout(filter_layout)
-        layout.addWidget(filter_group)
+        layout.addWidget(filter_group, 1)
 
         self._add_filter_rules(DEFAULT_EXTENSION_RULES)
 
-        layout.addStretch(1)
         scroll.setWidget(content)
         return scroll
 
