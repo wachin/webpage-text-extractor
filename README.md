@@ -27,7 +27,7 @@ That `.txt` file is much easier to handle: you attach it to your AI agent, paste
 ## Features
 
 - **Recursive**: traverses all subdirectories with `os.walk`.
-- **Text detection**: attempts to read each file as UTF-8; binary files (images, fonts, videos) are listed by name without cluttering output.
+- **Text detection**: reads UTF-8 (with or without BOM), UTF-16/UTF-32 with a BOM, and falls back to ANSI/Windows-1252; binary files (images, fonts, videos) are listed by name without cluttering output.
 - **Clear separators**: each text file is preceded by a header with its full path:
   ```
   --- Text file content: Blog-example/page.html ---
@@ -58,6 +58,77 @@ cd webpage-text-extractor
 
 Nothing else to install.
 
+## Windows 10 quick start
+
+These steps were tested on **Windows 10** with **Python 3.12** installed and
+added to the system `PATH`.
+
+1. Open **PowerShell** in the project folder:
+
+   ```powershell
+   cd "C:\path\to\webpage-text-extractor"
+   ```
+
+2. Check that Python is available:
+
+   ```powershell
+   python --version
+   ```
+
+   If `python` is not recognized, use `py --version` instead (or the full
+   path to `python.exe`).
+
+3. Install the GUI dependency (only `extract_text_gui.py` needs it):
+
+   ```powershell
+   python -m pip install --upgrade PyQt6
+   ```
+
+4. Start the graphical interface:
+
+   ```powershell
+   python extract_text_gui.py
+   ```
+
+   On first launch a **Quick setup** dialog appears: select the input folder,
+   click **Apply**, then click **Extract text**.
+
+   To start the GUI without a console window, use `pythonw`:
+
+   ```powershell
+   pythonw extract_text_gui.py
+   ```
+
+5. Run the command-line version (no PyQt6 required):
+
+   ```powershell
+   python extract_text.py "C:\path\to\saved-page" -o "C:\path\to\report.txt" -v
+   ```
+
+   Keep the output file **outside** the input folder. Both the GUI and the
+   command-line version refuse to save the report inside the folder being
+   analyzed, so they can never overwrite a source file.
+
+### Optional: desktop shortcut
+
+1. Right-click the desktop and choose **New → Shortcut**.
+2. Enter the path to `pythonw.exe` followed by the script path, for example:
+
+   ```text
+   C:\Users\<you>\AppData\Local\Programs\Python\Python312\pythonw.exe "C:\path\to\webpage-text-extractor\extract_text_gui.py"
+   ```
+
+3. Set **Start in** to the project folder and name the shortcut
+   **Webpage Text Extractor**.
+
+### Troubleshooting
+
+- `ModuleNotFoundError: No module named 'PyQt6'` — install it with
+  `python -m pip install --upgrade PyQt6`.
+- `'python' is not recognized` — use `py` instead of `python`, or call
+  `python.exe` by its full path. Reinstalling Python with **Add Python to
+  PATH** checked also fixes this.
+
 ## Graphical user interface (PyQt6)
 
 The project also includes a multi-platform GUI (Windows, Linux and macOS): [`extract_text_gui.py`](extract_text_gui.py). It is a **single self-contained file** — it does not depend on `extract_text.py` — so you can copy it to any other repository or folder and run it there (the `icons/` folder is optional: it only provides the program icon).
@@ -83,6 +154,34 @@ The project also includes a multi-platform GUI (Windows, Linux and macOS): [`ext
 python extract_text_gui.py
 ```
 
+### Run the interface in another language
+
+The GUI automatically loads the translation that matches the system language.
+To run it in English without changing the system settings, set `LANG` for that
+terminal session only:
+
+**PowerShell (Windows):**
+
+```powershell
+$env:LANG='en_US.UTF-8'; python .\extract_text_gui.py
+```
+
+**cmd.exe (Windows):**
+
+```bat
+set LANG=en_US.UTF-8 && python extract_text_gui.py
+```
+
+**Linux/macOS:**
+
+```bash
+LANG=en_US.UTF-8 python extract_text_gui.py
+```
+
+Only the current terminal session is affected. In PowerShell, run
+`Remove-Item Env:LANG` to restore the previous language. The same approach works
+with any available locale, for example `es_ES.UTF-8` for Spanish.
+
 ![](images/01-webpage-text-extractor.png)
 
 
@@ -90,6 +189,15 @@ python extract_text_gui.py
 
 - **Extraction tab**: selectors for the input folder, the output folder and the output file, with a progress bar and an execution log.
 - **Exclusions tab**: 18 selectors to exclude directories or files from the extraction (each one can point to a directory or to a file). **Add multiple folders…** selects several folders at once and fills the selectors automatically, and ticking **Show hidden files and folders** reveals entries such as `.git` that the system hides by default (they are extracted too, so you will usually want to exclude them).
+- **Extension filter tab**: rules matched by extension (`.svg`, `.min.js`) or by exact file name (`package-lock.json`) with three actions:
+  - **Extract content** — the normal text extraction.
+  - **Mention only (path)** — the path is written to the report but the file is not read, for example `/path/to/file/design.svg`.
+  - **Ignore completely** — the file does not appear in the report at all.
+
+  Exact file-name rules win over suffix rules, and the longest suffix wins (`.min.js` over `.js`); a later rule overrides an earlier rule with the same pattern. Rules are stored between sessions. The default rules keep `.svg`, `.map`, `.min.js`, `.min.css`, lock files, `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml` and `go.sum` as *Mention only*; **Add common rules** restores them and **Clear all rules** removes them. Choosing *Extract content* also overrides the built-in binary detection, so you can include an SVG's code if you really need it.
+
+  ![Extension filter tab of the graphical interface](images/03-Extension-filter.png)
+
 - **Help → About**: developer information dialog — program icon on the left, text on the right — with a clickable email link (opens your default email client) and website link (opens your default browser).
 - **Light and dark themes**: _View → Theme_.
 - **Multiplatform**: runs on Windows, Linux and macOS; the `Fusion` style guarantees the same look and working themes everywhere.
@@ -142,6 +250,9 @@ python extract_text.py <DIRECTORY> [-o OUTPUT_FILE] [-v]
 | `directory` | Folder containing files to analyze | `Promts` |
 | `-o`, `--output` | Output file name | `<directory>_src.txt` |
 | `-v`, `--verbose` | Show each processed file in console | disabled |
+
+The output file must be **outside** the input folder. The program stops with an
+error if it is inside, so it can never overwrite the files being analyzed.
 
 ### Simple version
 
@@ -240,7 +351,7 @@ done
 
 ## Which files are recognized as text?
 
-The script attempts to read **everything** as UTF-8. Additionally, it directly skips typically binary extensions to save time:
+The script attempts to read **everything** as text. It first tries UTF-8 (with or without BOM), then UTF-16/UTF-32 when they have a BOM, and finally the system's preferred encoding (the ANSI codepage on Windows) and Windows-1252. Additionally, it directly skips typically binary extensions to save time:
 
 ```
 .png .jpg .jpeg .gif .webp .ico .svg .bmp
@@ -249,13 +360,19 @@ The script attempts to read **everything** as UTF-8. Additionally, it directly s
 .zip .gz .br .rar .7z .pdf .exe .dll .so
 ```
 
-Any other file that cannot be decoded as UTF-8 is marked as `--- Non-text file: ... ---` in the output, only with its name.
+Any other file that cannot be decoded as text, or that looks binary (NUL bytes or too many control characters), is marked as `--- Non-text file: ... ---` in the output, only with its name.
+
+In the graphical interface the **File extension filter** lets you refine this per extension or file name. With the default rules, an SVG file is written to the report like this, without its code:
+
+```text
+--- Mention only: /path/to/file/design.svg ---
+```
 
 ## Tips
 
 - **`.js` and `.css` files are also extracted**: this is intentional. To replicate a page's design (colors, typography, layout), CSS is exactly what your AI agent needs.
 - **Large outputs**: a complete site saved with `Ctrl + S` can generate several MB of text. If your agent has context limits, process the main `.html` first or split the output.
-- **Encoding**: everything is processed as UTF-8. If you have files in another encoding (e.g., Latin-1), convert them first or modify `open(..., encoding="utf-8")`.
+- **Encoding**: UTF-8, UTF-8 with BOM, UTF-16/UTF-32 with BOM, ANSI/Windows-1252 and the system codepage are detected automatically. If a file uses another legacy encoding, convert it first.
 - **File order**: `os.walk` traverses in filesystem order. If you need a specific order, sort the `files` list inside the script.
 
 ## Limitations
@@ -273,7 +390,7 @@ Contributions are welcome:
 4. Push to the branch: `git push origin my-improvement`.
 5. Open a Pull Request.
 
-Improvement ideas: extension filters, visible HTML text extraction only, multiple encoding support, per-file output mode.
+Improvement ideas: visible HTML text extraction only, per-file output mode.
 
 ## License
 

@@ -31,7 +31,7 @@ Ese archivo `.txt` es mucho más fácil de manejar: lo adjuntas a tu agente de I
 ## Características
 
 - **Recursivo**: recorre todos los subdirectorios con `os.walk`.
-- **Detección de texto**: intenta leer cada archivo como UTF-8; los binarios (imágenes, fuentes, videos) se listan por nombre sin ensuciar la salida.
+- **Detección de texto**: lee UTF-8 (con o sin BOM), UTF-16/UTF-32 con BOM y, si hace falta, ANSI/Windows-1252; los binarios (imágenes, fuentes, videos) se listan por nombre sin ensuciar la salida.
 - **Separadores claros**: cada archivo de texto va precedido de un encabezado con su ruta completa:
   ```
   --- Contenido del archivo de texto: Blog-ejemplo/pagina.html ---
@@ -87,10 +87,48 @@ El proyecto también incluye una interfaz gráfica multiplataforma (Windows, Lin
 python extract_text_gui.py
 ```
 
+### Ejecutar la interfaz en otro idioma
+
+La interfaz carga automáticamente la traducción que coincide con el idioma del
+sistema. Para abrirla en inglés sin cambiar la configuración del sistema,
+define `LANG` solo para esa sesión de terminal:
+
+**PowerShell (Windows):**
+
+```powershell
+$env:LANG='en_US.UTF-8'; python .\extract_text_gui.py
+```
+
+**cmd.exe (Windows):**
+
+```bat
+set LANG=en_US.UTF-8 && python extract_text_gui.py
+```
+
+**Linux/macOS:**
+
+```bash
+LANG=en_US.UTF-8 python extract_text_gui.py
+```
+
+Solo afecta a la sesión de terminal actual. En PowerShell, ejecuta
+`Remove-Item Env:LANG` para recuperar el idioma anterior. El mismo método
+funciona con cualquier idioma disponible, por ejemplo `es_ES.UTF-8` para
+español.
+
 ### Características
 
 - **Pestaña Extracción**: selectores de carpeta de entrada, carpeta de salida y archivo de salida, con barra de progreso y registro de ejecución.
 - **Pestaña Exclusiones**: 18 selectores para excluir directorios o archivos de la extracción (cada uno puede apuntar a un directorio o a un archivo). **Agregar varias carpetas…** permite seleccionar varias carpetas de una vez y rellena los selectores automáticamente, y marcar **Mostrar archivos y carpetas ocultos** revela elementos como `.git` que el sistema oculta por defecto (también se extraen, así que normalmente querrás excluirlos).
+- **Pestaña Filtro por extensión**: reglas que se comparan por extensión (`.svg`, `.min.js`) o por nombre exacto de archivo (`package-lock.json`) con tres acciones:
+  - **Extraer contenido** — la extracción de texto normal.
+  - **Solo mencionar (ruta)** — se escribe la ruta en el informe pero no se lee el archivo, por ejemplo `/ruta/del/archivo/diseño.svg`.
+  - **Ignorar por completo** — el archivo no aparece en el informe.
+
+  Las reglas de nombre exacto tienen prioridad sobre las de extensión, y gana la extensión más larga (`.min.js` sobre `.js`); una regla posterior sustituye a otra anterior con el mismo patrón. Las reglas se guardan entre sesiones. Las reglas predeterminadas dejan como *Solo mencionar* `.svg`, `.map`, `.min.js`, `.min.css`, archivos de bloqueo, `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml` y `go.sum`; **Agregar reglas comunes** las restaura y **Borrar todas las reglas** las elimina. Elegir *Extraer contenido* también anula la detección integrada de binarios, así que puedes incluir el código de un SVG si de verdad lo necesitas.
+
+  ![Pestaña Filtro por extensión de la interfaz gráfica](images/03-Extension-filter.png)
+
 - **Ayuda → Acerca de**: diálogo de información para el desarrollador — icono del programa a la izquierda, texto a la derecha — con enlace de correo y enlace web clicables (abren el cliente de correo y el navegador predeterminados).
 - **Temas claro y oscuro**: _Ver → Tema_.
 - **Multiplataforma**: funciona en Windows, Linux y macOS; el estilo `Fusion` garantiza el mismo aspecto y temas funcionales en todos.
@@ -143,6 +181,10 @@ python extract_text.py <DIRECTORIO> [-o ARCHIVO_SALIDA] [-v]
 | `directorio` | Carpeta que contiene los archivos a analizar | `Promts` |
 | `-o`, `--output` | Nombre del archivo de salida | `<directorio>_src.txt` |
 | `-v`, `--verbose` | Muestra en consola cada archivo procesado | desactivado |
+
+El archivo de salida debe estar **fuera** de la carpeta de entrada. El programa
+se detiene con un error si está dentro, para no sobrescribir nunca los archivos
+que se están analizando.
 
 ### Versión simple
 
@@ -241,7 +283,7 @@ done
 
 ## ¿Qué archivos reconoce como texto?
 
-El script intenta leer **todo** como UTF-8. Además, omite directamente las extensiones típicamente binarias para no perder tiempo:
+El script intenta leer **todo** como texto. Primero prueba UTF-8 (con o sin BOM), después UTF-16/UTF-32 cuando tienen BOM y, por último, la codificación preferida del sistema (ANSI en Windows) y Windows-1252. Además, omite directamente las extensiones típicamente binarias para no perder tiempo:
 
 ```
 .png .jpg .jpeg .gif .webp .ico .svg .bmp
@@ -250,13 +292,19 @@ El script intenta leer **todo** como UTF-8. Además, omite directamente las exte
 .zip .gz .br .rar .7z .pdf .exe .dll .so
 ```
 
-Cualquier otro archivo que no se pueda decodificar como UTF-8 se marca como `--- Archivo no de texto: ... ---` en la salida, solo con su nombre.
+Cualquier otro archivo que no se pueda decodificar como texto, o que parezca binario (bytes NUL o demasiados caracteres de control), se marca como `--- Archivo no de texto: ... ---` en la salida, solo con su nombre.
+
+En la interfaz gráfica, el **Filtro por extensión** permite ajustar esto por extensión o por nombre de archivo. Con las reglas predeterminadas, un archivo SVG se escribe en el informe así, sin su código:
+
+```text
+--- Mention only: /ruta/del/archivo/diseño.svg ---
+```
 
 ## Consejos
 
 - **Los archivos `.js` y `.css` también se extraen**: eso es intencional. Para replicar el diseño de una página (colores, tipografías, layout), el CSS es justo lo que tu agente de IA necesita.
 - **Salidas grandes**: un sitio completo guardado con `Ctrl + S` puede generar varios MB de texto. Si tu agente tiene límite de contexto, procesa primero el `.html` principal o divide la salida.
-- **Codificación**: todo se procesa como UTF-8. Si tienes archivos en otra codificación (p. ej. Latin-1), conviértelos antes o modifica `open(..., encoding="utf-8")`.
+- **Codificación**: UTF-8, UTF-8 con BOM, UTF-16/UTF-32 con BOM, ANSI/Windows-1252 y la codificación del sistema se detectan automáticamente. Si un archivo usa otra codificación heredada, conviértelo antes.
 - **Orden de los archivos**: `os.walk` recorre en el orden del sistema de archivos. Si necesitas un orden específico, ordena la lista `archivos` dentro del script.
 
 ## Limitaciones
@@ -274,7 +322,7 @@ Las contribuciones son bienvenidas:
 4. Push a la rama: `git push origin mi-mejora`.
 5. Abre un Pull Request.
 
-Ideas de mejora: filtros por extensión, extracción solo del texto visible del HTML, soporte de codificaciones múltiples, modo de salida por archivo.
+Ideas de mejora: extracción solo del texto visible del HTML, modo de salida por archivo.
 
 ## Licencia
 
