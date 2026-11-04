@@ -27,7 +27,7 @@ That `.txt` file is much easier to handle: you attach it to your AI agent, paste
 ## Features
 
 - **Recursive**: traverses all subdirectories with `os.walk`.
-- **Text detection**: attempts to read each file as UTF-8; binary files (images, fonts, videos) are listed by name without cluttering output.
+- **Text detection**: reads UTF-8 (with or without BOM), UTF-16/UTF-32 with a BOM, and falls back to ANSI/Windows-1252; binary files (images, fonts, videos) are listed by name without cluttering output.
 - **Clear separators**: each text file is preceded by a header with its full path:
   ```
   --- Text file content: Blog-example/page.html ---
@@ -105,9 +105,9 @@ added to the system `PATH`.
    python extract_text.py "C:\path\to\saved-page" -o "C:\path\to\report.txt" -v
    ```
 
-   Keep the output file **outside** the input folder when using the
-   command-line version: unlike the GUI, it does not exclude its own report
-   from the scan.
+   Keep the output file **outside** the input folder. Both the GUI and the
+   command-line version refuse to save the report inside the folder being
+   analyzed, so they can never overwrite a source file.
 
 ### Optional: desktop shortcut
 
@@ -161,6 +161,12 @@ python extract_text_gui.py
 
 - **Extraction tab**: selectors for the input folder, the output folder and the output file, with a progress bar and an execution log.
 - **Exclusions tab**: 18 selectors to exclude directories or files from the extraction (each one can point to a directory or to a file). **Add multiple folders…** selects several folders at once and fills the selectors automatically, and ticking **Show hidden files and folders** reveals entries such as `.git` that the system hides by default (they are extracted too, so you will usually want to exclude them).
+- **Extension filter tab**: rules matched by extension (`.svg`, `.min.js`) or by exact file name (`package-lock.json`) with three actions:
+  - **Extract content** — the normal text extraction.
+  - **Mention only (path)** — the path is written to the report but the file is not read, for example `/path/to/file/design.svg`.
+  - **Ignore completely** — the file does not appear in the report at all.
+
+  Exact file-name rules win over suffix rules, and the longest suffix wins (`.min.js` over `.js`); a later rule overrides an earlier rule with the same pattern. Rules are stored between sessions. The default rules keep `.svg`, `.map`, `.min.js`, `.min.css`, lock files, `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml` and `go.sum` as *Mention only*; **Add common rules** restores them and **Clear all rules** removes them. Choosing *Extract content* also overrides the built-in binary detection, so you can include an SVG's code if you really need it.
 - **Help → About**: developer information dialog — program icon on the left, text on the right — with a clickable email link (opens your default email client) and website link (opens your default browser).
 - **Light and dark themes**: _View → Theme_.
 - **Multiplatform**: runs on Windows, Linux and macOS; the `Fusion` style guarantees the same look and working themes everywhere.
@@ -213,6 +219,9 @@ python extract_text.py <DIRECTORY> [-o OUTPUT_FILE] [-v]
 | `directory` | Folder containing files to analyze | `Promts` |
 | `-o`, `--output` | Output file name | `<directory>_src.txt` |
 | `-v`, `--verbose` | Show each processed file in console | disabled |
+
+The output file must be **outside** the input folder. The program stops with an
+error if it is inside, so it can never overwrite the files being analyzed.
 
 ### Simple version
 
@@ -311,7 +320,7 @@ done
 
 ## Which files are recognized as text?
 
-The script attempts to read **everything** as UTF-8. Additionally, it directly skips typically binary extensions to save time:
+The script attempts to read **everything** as text. It first tries UTF-8 (with or without BOM), then UTF-16/UTF-32 when they have a BOM, and finally the system's preferred encoding (the ANSI codepage on Windows) and Windows-1252. Additionally, it directly skips typically binary extensions to save time:
 
 ```
 .png .jpg .jpeg .gif .webp .ico .svg .bmp
@@ -320,13 +329,19 @@ The script attempts to read **everything** as UTF-8. Additionally, it directly s
 .zip .gz .br .rar .7z .pdf .exe .dll .so
 ```
 
-Any other file that cannot be decoded as UTF-8 is marked as `--- Non-text file: ... ---` in the output, only with its name.
+Any other file that cannot be decoded as text, or that looks binary (NUL bytes or too many control characters), is marked as `--- Non-text file: ... ---` in the output, only with its name.
+
+In the graphical interface the **File extension filter** lets you refine this per extension or file name. With the default rules, an SVG file is written to the report like this, without its code:
+
+```text
+--- Mention only: /path/to/file/design.svg ---
+```
 
 ## Tips
 
 - **`.js` and `.css` files are also extracted**: this is intentional. To replicate a page's design (colors, typography, layout), CSS is exactly what your AI agent needs.
 - **Large outputs**: a complete site saved with `Ctrl + S` can generate several MB of text. If your agent has context limits, process the main `.html` first or split the output.
-- **Encoding**: everything is processed as UTF-8. If you have files in another encoding (e.g., Latin-1), convert them first or modify `open(..., encoding="utf-8")`.
+- **Encoding**: UTF-8, UTF-8 with BOM, UTF-16/UTF-32 with BOM, ANSI/Windows-1252 and the system codepage are detected automatically. If a file uses another legacy encoding, convert it first.
 - **File order**: `os.walk` traverses in filesystem order. If you need a specific order, sort the `files` list inside the script.
 
 ## Limitations
@@ -344,7 +359,7 @@ Contributions are welcome:
 4. Push to the branch: `git push origin my-improvement`.
 5. Open a Pull Request.
 
-Improvement ideas: extension filters, visible HTML text extraction only, multiple encoding support, per-file output mode.
+Improvement ideas: visible HTML text extraction only, per-file output mode.
 
 ## License
 

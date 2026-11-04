@@ -11,6 +11,8 @@ Sin dependencias externas: solo biblioteca estándar de Python 3.
 """
 
 import argparse
+import codecs
+import locale
 import os
 import sys
 
@@ -22,19 +24,94 @@ EXTENSIONES_BINARIAS = {
     ".zip", ".gz", ".br", ".rar", ".7z", ".pdf", ".exe", ".dll", ".so",
 }
 
+# Caracteres de control que sí aparecen en archivos de texto normales.
+CONTROLES_PERMITIDOS = "\t\n\r\f\b"
 
-def es_archivo_texto(ruta_archivo, verbose=False):
-    """Devuelve True si el archivo se puede leer como texto UTF-8."""
+
+def _parece_texto(texto):
+    """Descarta contenido binario que haya podido decodificarse por error."""
+    if "\x00" in texto:
+        return False
+    muestra = texto[:8192]
+    if not muestra:
+        return True
+    controles = sum(
+        1
+        for caracter in muestra
+        if (ord(caracter) < 32 or ord(caracter) == 127)
+        and caracter not in CONTROLES_PERMITIDOS
+    )
+    return controles / len(muestra) <= 0.02
+
+
+def _decodificar_texto(datos):
+    """Devuelve el texto de `datos` o None si parecen datos binarios.
+
+    Se respeta el BOM de UTF-8, UTF-16 y UTF-32. Sin BOM se intenta UTF-8,
+    la codificación preferida del sistema (ANSI en Windows) y cp1252, de
+    modo que los archivos guardados con el Bloc de notas no se pierdan.
+    """
+    if not datos:
+        return ""
+
+    if datos.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)):
+        candidatas = ("utf-32",)
+    elif datos.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        candidatas = ("utf-16",)
+    elif datos.startswith(codecs.BOM_UTF8):
+        candidatas = ("utf-8-sig",)
+    else:
+        # Un NUL en un archivo sin BOM es una señal fiable de contenido binario.
+        if b"\x00" in datos[:8192]:
+            return None
+        candidatas = []
+        preferida = locale.getpreferredencoding(False)
+        for codificacion in ("utf-8", preferida, "cp1252"):
+            if codificacion and codificacion.lower() not in (
+                candidata.lower() for candidata in candidatas
+            ):
+                candidatas.append(codificacion)
+
+    for codificacion in candidatas:
+        try:
+            texto = datos.decode(codificacion)
+        except (UnicodeDecodeError, LookupError):
+            continue
+        return texto if _parece_texto(texto) else None
+    return None
+
+
+def leer_archivo_texto(ruta_archivo):
+    """Lee el archivo una sola vez y devuelve su texto, o None si es binario."""
     extension = os.path.splitext(ruta_archivo)[1].lower()
     if extension in EXTENSIONES_BINARIAS:
-        return False
+        return None
     try:
-        with open(ruta_archivo, "r", encoding="utf-8") as f:
-            f.read()
+        with open(ruta_archivo, "rb") as f:
+            datos = f.read()
+    except OSError:
+        return None
+    return _decodificar_texto(datos)
+
+
+def es_archivo_texto(ruta_archivo, verbose=False):
+    """Devuelve True si el archivo se puede leer como texto."""
+    if leer_archivo_texto(ruta_archivo) is not None:
         return True
-    except (UnicodeDecodeError, OSError):
-        if verbose:
-            print(f"  [omitido, no es texto] {ruta_archivo}", file=sys.stderr)
+    if verbose:
+        print(f"  [omitido, no es texto] {ruta_archivo}", file=sys.stderr)
+    return False
+
+
+def esta_dentro_de(ruta, directorio):
+    """Devuelve True si `ruta` está dentro de `directorio`."""
+    try:
+        ruta_normal = os.path.normcase(os.path.realpath(os.path.abspath(ruta)))
+        directorio_normal = os.path.normcase(
+            os.path.realpath(os.path.abspath(directorio))
+        )
+        return os.path.commonpath([ruta_normal, directorio_normal]) == directorio_normal
+    except ValueError:  # Rutas en unidades distintas (por ejemplo C: y D:).
         return False
 
 
@@ -47,11 +124,11 @@ def analizar_directorio(directorio, archivo_salida, verbose=False):
         for ruta_directorio, _subdirectorios, archivos in os.walk(directorio):
             for archivo in archivos:
                 ruta_completa = os.path.join(ruta_directorio, archivo)
-                if es_archivo_texto(ruta_completa, verbose):
+                contenido = leer_archivo_texto(ruta_completa)
+                if contenido is not None:
                     try:
                         salida.write(f"\n--- Contenido del archivo de texto: {ruta_completa} ---\n")
-                        with open(ruta_completa, "r", encoding="utf-8") as f:
-                            salida.write(f.read())
+                        salida.write(contenido)
                         salida.write("\n")  # Nueva línea al final del contenido
                         contador_texto += 1
                         if verbose:
@@ -62,6 +139,8 @@ def analizar_directorio(directorio, archivo_salida, verbose=False):
                     # Para archivos binarios, solo listamos el nombre
                     salida.write(f"\n--- Archivo no de texto: {ruta_completa} ---\n")
                     contador_binario += 1
+                    if verbose:
+                        print(f"  [omitido, no es texto] {ruta_completa}", file=sys.stderr)
 
     return contador_texto, contador_binario
 
@@ -94,6 +173,19 @@ def main():
         sys.exit(1)
 
     archivo_salida = args.output or f"{os.path.basename(os.path.normpath(args.directorio))}_src.txt"
+
+    if esta_dentro_de(archivo_salida, args.directorio):
+        print(
+            "Error: el archivo de salida no puede estar dentro del "
+            f"directorio a analizar: '{archivo_salida}'",
+            file=sys.stderr,
+        )
+        print(
+            "Elija una ubicación fuera de esa carpeta para no sobrescribir "
+            "los archivos que se van a analizar.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     texto, binarios = analizar_directorio(args.directorio, archivo_salida, args.verbose)
 

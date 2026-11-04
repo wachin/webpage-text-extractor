@@ -55,6 +55,8 @@ License: GPL-3.0
 
 from __future__ import annotations
 
+import codecs
+import locale
 import os
 import sys
 import time
@@ -89,6 +91,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -96,6 +99,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -105,6 +109,8 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QProgressBar,
     QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
     QTabWidget,
     QTreeView,
     QVBoxLayout,
@@ -130,23 +136,182 @@ BINARY_EXTENSIONS = {
     ".zip", ".gz", ".br", ".rar", ".7z", ".pdf", ".exe", ".dll", ".so",
 }
 
+# Extension filter modes.
+FILTER_EXTRACT = "extract"
+FILTER_MENTION = "mention"
+FILTER_IGNORE = "ignore"
+
+FILTER_ACTIONS = (
+    ("Extract content", FILTER_EXTRACT),
+    ("Mention only (path)", FILTER_MENTION),
+    ("Ignore completely", FILTER_IGNORE),
+)
+
+# Useful defaults for saved web pages and source repositories. The files are
+# still listed (with their path) but their content is not added to the report.
+DEFAULT_EXTENSION_RULES = (
+    (".svg", FILTER_MENTION),
+    (".map", FILTER_MENTION),
+    (".min.js", FILTER_MENTION),
+    (".min.css", FILTER_MENTION),
+    (".lock", FILTER_MENTION),
+    (".lockb", FILTER_MENTION),
+    (".lockfile", FILTER_MENTION),
+    (".snap", FILTER_MENTION),
+    ("package-lock.json", FILTER_MENTION),
+    ("npm-shrinkwrap.json", FILTER_MENTION),
+    ("pnpm-lock.yaml", FILTER_MENTION),
+    ("go.sum", FILTER_MENTION),
+)
+
+
+# Control characters that are normal in text files.
+ALLOWED_CONTROLS = "\t\n\r\f\b"
+
+
+def _looks_like_text(text: str) -> bool:
+    """Reject binary content that happened to decode without errors."""
+    if "\x00" in text:
+        return False
+    sample = text[:8192]
+    if not sample:
+        return True
+    controls = sum(
+        1
+        for character in sample
+        if (ord(character) < 32 or ord(character) == 127)
+        and character not in ALLOWED_CONTROLS
+    )
+    return controls / len(sample) <= 0.02
+
+
+def _decode_text(data: bytes) -> Optional[str]:
+    """Decode `data`, honouring BOMs and falling back to the ANSI codepage.
+
+    The fallback keeps files saved as ANSI/Windows-1252 from being silently
+    skipped, which is common on Windows. A NUL byte or a high proportion of
+    control characters still classifies a file as binary.
+    """
+    if not data:
+        return ""
+
+    if data.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)):
+        candidates = ("utf-32",)
+    elif data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        candidates = ("utf-16",)
+    elif data.startswith(codecs.BOM_UTF8):
+        candidates = ("utf-8-sig",)
+    else:
+        # A NUL in a file without a BOM is a reliable binary signal.
+        if b"\x00" in data[:8192]:
+            return None
+        candidates = []
+        preferred = locale.getpreferredencoding(False)
+        for encoding in ("utf-8", preferred, "cp1252"):
+            if encoding and encoding.lower() not in (
+                candidate.lower() for candidate in candidates
+            ):
+                candidates.append(encoding)
+
+    for encoding in candidates:
+        try:
+            text = data.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+        return text if _looks_like_text(text) else None
+    return None
+
+
+def read_text_file(path: str, force: bool = False) -> Optional[str]:
+    """Read the file once and return its text, or None for binary files.
+
+    `force` lets an explicit "Extract content" rule read a file whose
+    extension is normally treated as binary (for example an SVG icon).
+    """
+    extension = os.path.splitext(path)[1].lower()
+    if not force and extension in BINARY_EXTENSIONS:
+        return None
+    try:
+        with open(path, "rb") as handle:
+            data = handle.read()
+    except OSError:
+        return None
+    return _decode_text(data)
+
 
 def is_text_file(path: str) -> bool:
-    """Return True when the file can be read as UTF-8 text.
+    """Return True when the file can be read as text.
 
     Same detection rule used by extract_text.py, kept here so that this
     file has no dependencies beyond PyQt6 and can be copied to any folder
     or repository.
     """
-    extension = os.path.splitext(path)[1].lower()
-    if extension in BINARY_EXTENSIONS:
-        return False
+    return read_text_file(path) is not None
+
+
+def is_path_within(path: str, directory: str) -> bool:
+    """Return True when `path` is inside `directory`."""
     try:
-        with open(path, "r", encoding="utf-8") as handle:
-            handle.read()
-        return True
-    except (UnicodeDecodeError, OSError):
+        normalized_path = os.path.normcase(
+            os.path.realpath(os.path.abspath(path))
+        )
+        normalized_directory = os.path.normcase(
+            os.path.realpath(os.path.abspath(directory))
+        )
+        return (
+            os.path.commonpath([normalized_path, normalized_directory])
+            == normalized_directory
+        )
+    except ValueError:  # Paths on different drives (e.g. C: and D:).
         return False
+
+
+def normalize_filter_token(token: str) -> str:
+    """Normalize one extension/filename rule.
+
+    Entries starting with a dot are suffix rules (``.svg``, ``.min.js``);
+    anything else is an exact, case-insensitive file name
+    (``package-lock.json``). A leading ``*.`` is accepted too.
+    """
+    token = str(token).strip().lower()
+    if token.startswith("*."):
+        token = token[1:]
+    return token
+
+
+def extension_action(path: str, rules: list) -> str:
+    """Return what to do with `path` according to the extension filter.
+
+    Exact file-name rules win over suffix rules, and the longest matching
+    suffix wins (so ``.min.js`` overrides ``.js``). Without a matching rule,
+    the built-in binary extension list means "mention only" and everything
+    else is extracted.
+    """
+    name = os.path.basename(path).lower()
+    exact_action = None
+    suffix_match = None
+
+    for token, action in rules:
+        token = normalize_filter_token(token)
+        if not token:
+            continue
+        if action not in (FILTER_EXTRACT, FILTER_MENTION, FILTER_IGNORE):
+            action = FILTER_MENTION
+        if token.startswith("."):
+            if name.endswith(token) and (
+                suffix_match is None or len(token) >= len(suffix_match[0])
+            ):
+                suffix_match = (token, action)
+        elif name == token:
+            exact_action = action
+
+    if exact_action is not None:
+        return exact_action
+    if suffix_match is not None:
+        return suffix_match[1]
+    if os.path.splitext(name)[1] in BINARY_EXTENSIONS:
+        return FILTER_MENTION
+    return FILTER_EXTRACT
 
 # ---------------------------------------------------------------------------
 # Themes (light / dark)
@@ -421,6 +586,7 @@ class ExtractionWorker(QThread):
         output_file: str,
         exclusions: list,
         tree_folders: Optional[list] = None,
+        extension_rules: Optional[list] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -430,6 +596,12 @@ class ExtractionWorker(QThread):
         self.exclusions = exclusions
         # Folders whose tree-style listing goes into the report.
         self.tree_folders = tree_folders or []
+        # List of (extension or file name, action).
+        self.extension_rules = [
+            (normalize_filter_token(token), action)
+            for token, action in (extension_rules or [])
+            if normalize_filter_token(token)
+        ]
 
     # -- helpers -----------------------------------------------------------
 
@@ -625,48 +797,73 @@ class ExtractionWorker(QThread):
                         self.log_message.emit(
                             self.tr("[excluded] {path}").format(path=path)
                         )
-                    elif is_text_file(path):
-                        try:
-                            with open(path, "r", encoding="utf-8") as handle:
-                                content = handle.read()
+                    else:
+                        action = extension_action(path, self.extension_rules)
+                        if action == FILTER_IGNORE:
+                            excluded_count += 1
+                            self.log_message.emit(
+                                self.tr(
+                                    "[ignored by extension filter] {path}"
+                                ).format(path=path)
+                            )
+                        elif action == FILTER_MENTION:
                             report.write(
                                 "\n"
-                                + self.tr("--- Text file content: {path} ---").format(
+                                + self.tr(
+                                    "--- Mention only: {path} ---"
+                                ).format(path=path)
+                                + "\n"
+                            )
+                            binary_count += 1
+                            self.log_message.emit(
+                                self.tr("[mentioned only] {path}").format(
                                     path=path
                                 )
-                                + "\n"
                             )
-                            report.write(content)
-                            report.write("\n")
-                            text_count += 1
-                            self.log_message.emit(
-                                self.tr("[text] {path}").format(path=path)
-                            )
-                        except Exception as error:  # Keep going with next file.
-                            report.write(
-                                "\n"
-                                + self.tr("[error reading {path}: {error}]").format(
-                                    path=path, error=error
+                        else:
+                            content = read_text_file(path, force=True)
+                            if content is not None:
+                                try:
+                                    report.write(
+                                        "\n"
+                                        + self.tr(
+                                            "--- Text file content: {path} ---"
+                                        ).format(path=path)
+                                        + "\n"
+                                    )
+                                    report.write(content)
+                                    report.write("\n")
+                                    text_count += 1
+                                    self.log_message.emit(
+                                        self.tr("[text] {path}").format(path=path)
+                                    )
+                                except Exception as error:  # Keep going.
+                                    report.write(
+                                        "\n"
+                                        + self.tr(
+                                            "[error reading {path}: {error}]"
+                                        ).format(path=path, error=error)
+                                        + "\n"
+                                    )
+                                    self.log_message.emit(
+                                        self.tr(
+                                            "[error] {path}: {error}"
+                                        ).format(path=path, error=error)
+                                    )
+                            else:
+                                report.write(
+                                    "\n"
+                                    + self.tr(
+                                        "--- Non-text file: {path} ---"
+                                    ).format(path=path)
+                                    + "\n"
                                 )
-                                + "\n"
-                            )
-                            self.log_message.emit(
-                                self.tr("[error] {path}: {error}").format(
-                                    path=path, error=error
+                                binary_count += 1
+                                self.log_message.emit(
+                                    self.tr(
+                                        "[skipped, not text] {path}"
+                                    ).format(path=path)
                                 )
-                            )
-                    else:
-                        report.write(
-                            "\n"
-                            + self.tr("--- Non-text file: {path} ---").format(
-                                path=path
-                            )
-                            + "\n"
-                        )
-                        binary_count += 1
-                        self.log_message.emit(
-                            self.tr("[skipped, not text] {path}").format(path=path)
-                        )
 
                     if total > 0:
                         self.progress_changed.emit(
@@ -701,7 +898,7 @@ class ExtractionWorker(QThread):
 # ---------------------------------------------------------------------------
 
 class MainWindow(QMainWindow):
-    """Main window with two tabs: Extraction and Exclusions."""
+    """Main window with three tabs: Extraction, Exclusions and Extension filter."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -778,6 +975,9 @@ class MainWindow(QMainWindow):
         self.tabs.setDocumentMode(True)
         self.tabs.addTab(self._build_extraction_tab(), self.tr("Extraction"))
         self.tabs.addTab(self._build_exclusions_tab(), self.tr("Exclusions"))
+        self.tabs.addTab(
+            self._build_filter_tab(), self.tr("Extension filter")
+        )
         self.setCentralWidget(self.tabs)
         self.statusBar().showMessage(self.tr("Ready"))
 
@@ -904,6 +1104,116 @@ class MainWindow(QMainWindow):
         )
         return page
 
+    def _build_filter_tab(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        content = QWidget()
+        layout = QVBoxLayout(content)
+
+        intro = QLabel(
+            self.tr(
+                "Decide what happens to files by extension or by exact file "
+                "name. These rules apply to the whole input folder."
+            )
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        # Extension filter: extract, mention only or ignore matching files.
+        filter_group = QGroupBox(self.tr("File extension filter"))
+        filter_layout = QVBoxLayout()
+
+        filter_hint = QLabel(
+            self.tr(
+                "Rules are matched by extension or by exact file name. "
+                "“Mention only” writes the path without extracting the code "
+                "(useful for .svg icons, source maps or lock files); "
+                "“Ignore completely” leaves the file out of the report. "
+                "These rules override the built-in binary detection."
+            )
+        )
+        filter_hint.setWordWrap(True)
+        filter_layout.addWidget(filter_hint)
+
+        filter_examples = QLabel(
+            self.tr(
+                "Examples: .svg → Mention only · .map → Ignore completely · "
+                "package-lock.json → Mention only"
+            )
+        )
+        filter_examples.setWordWrap(True)
+        filter_layout.addWidget(filter_examples)
+
+        self.filter_table = QTableWidget(0, 2)
+        self.filter_table.setHorizontalHeaderLabels(
+            [self.tr("Extension or file"), self.tr("Action")]
+        )
+        self.filter_table.verticalHeader().setVisible(False)
+        self.filter_table.setAlternatingRowColors(True)
+        self.filter_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.filter_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
+        self.filter_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked
+            | QAbstractItemView.EditTrigger.EditKeyPressed
+            | QAbstractItemView.EditTrigger.SelectedClicked
+        )
+        filter_header = self.filter_table.horizontalHeader()
+        filter_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        filter_header.setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.filter_table.setMinimumHeight(170)
+        filter_layout.addWidget(self.filter_table)
+
+        filter_buttons = QHBoxLayout()
+        self.add_filter_button = QPushButton(self.tr("Add rule"))
+        self.add_filter_button.setToolTip(
+            self.tr("Add an empty rule and type an extension or file name")
+        )
+        self.add_filter_button.clicked.connect(self._add_empty_filter_rule)
+        filter_buttons.addWidget(self.add_filter_button)
+
+        self.add_common_filter_button = QPushButton(
+            self.tr("Add common rules")
+        )
+        self.add_common_filter_button.setToolTip(
+            self.tr(
+                "Add common web and repository rules without changing the "
+                "rules that are already listed"
+            )
+        )
+        self.add_common_filter_button.clicked.connect(
+            self._add_common_filter_rules
+        )
+        filter_buttons.addWidget(self.add_common_filter_button)
+
+        self.remove_filter_button = QPushButton(self.tr("Remove selected"))
+        self.remove_filter_button.clicked.connect(
+            self._remove_selected_filter_rules
+        )
+        filter_buttons.addWidget(self.remove_filter_button)
+
+        self.clear_filter_button = QPushButton(self.tr("Clear all rules"))
+        self.clear_filter_button.clicked.connect(self._clear_filter_rules)
+        filter_buttons.addWidget(self.clear_filter_button)
+        filter_buttons.addStretch(1)
+        filter_layout.addLayout(filter_buttons)
+
+        filter_group.setLayout(filter_layout)
+        layout.addWidget(filter_group)
+
+        self._add_filter_rules(DEFAULT_EXTENSION_RULES)
+
+        layout.addStretch(1)
+        scroll.setWidget(content)
+        return scroll
+
     def _build_exclusions_tab(self) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1018,6 +1328,82 @@ class MainWindow(QMainWindow):
         scroll.setWidget(content)
         self._update_exclusion_status()
         return scroll
+
+    # -- extension filter helpers ------------------------------------------
+
+    def _add_filter_row(self, token: str, action: str) -> int:
+        """Append one rule row and return its index."""
+        row = self.filter_table.rowCount()
+        self.filter_table.insertRow(row)
+
+        item = QTableWidgetItem(token)
+        item.setToolTip(
+            self.tr(
+                "Extension starting with a dot (.svg) or exact file name "
+                "(package-lock.json)"
+            )
+        )
+        self.filter_table.setItem(row, 0, item)
+
+        combo = QComboBox()
+        for label, value in FILTER_ACTIONS:
+            combo.addItem(self.tr(label), value)
+        index = combo.findData(action)
+        combo.setCurrentIndex(index if index >= 0 else 1)
+        combo.setToolTip(self.tr("What to do with matching files"))
+        self.filter_table.setCellWidget(row, 1, combo)
+        return row
+
+    def _add_filter_rules(self, rules: list) -> None:
+        """Add the rules that are not already present (keeping user choices)."""
+        existing = {
+            normalize_filter_token(token)
+            for token, _action in self._collect_extension_rules()
+        }
+        for token, action in rules:
+            normalized = normalize_filter_token(token)
+            if not normalized or normalized in existing:
+                continue
+            self._add_filter_row(normalized, action)
+            existing.add(normalized)
+
+    def _add_empty_filter_rule(self) -> None:
+        row = self._add_filter_row("", FILTER_MENTION)
+        self.filter_table.setCurrentCell(row, 0)
+        item = self.filter_table.item(row, 0)
+        if item is not None:
+            self.filter_table.editItem(item)
+
+    def _add_common_filter_rules(self) -> None:
+        self._add_filter_rules(DEFAULT_EXTENSION_RULES)
+
+    def _remove_selected_filter_rules(self) -> None:
+        rows = sorted(
+            {index.row() for index in self.filter_table.selectedIndexes()},
+            reverse=True,
+        )
+        if not rows and self.filter_table.currentRow() >= 0:
+            rows = [self.filter_table.currentRow()]
+        for row in rows:
+            self.filter_table.removeRow(row)
+
+    def _clear_filter_rules(self) -> None:
+        self.filter_table.setRowCount(0)
+
+    def _collect_extension_rules(self) -> list:
+        """Return the table as a list of (token, action) pairs."""
+        rules = {}
+        for row in range(self.filter_table.rowCount()):
+            item = self.filter_table.item(row, 0)
+            token = normalize_filter_token(item.text() if item else "")
+            if not token:
+                continue
+            combo = self.filter_table.cellWidget(row, 1)
+            action = combo.currentData() if isinstance(combo, QComboBox) else None
+            if action not in (FILTER_EXTRACT, FILTER_MENTION, FILTER_IGNORE):
+                action = FILTER_MENTION
+            rules[token] = action
+        return list(rules.items())
 
     # -- exclusions helpers ------------------------------------------------
 
@@ -1391,6 +1777,19 @@ class MainWindow(QMainWindow):
             else os.path.join(output_dir, file_name)
         )
 
+        if is_path_within(output_file, input_dir):
+            QMessageBox.warning(
+                self,
+                self.tr("Output inside the input folder"),
+                self.tr(
+                    "The report cannot be saved inside the input folder:\n"
+                    "{path}\n\n"
+                    "Choose an output folder outside the input folder so that "
+                    "the files being analyzed are never overwritten."
+                ).format(path=output_file),
+            )
+            return
+
         self._append_log(
             self.tr("Extraction started: {source} → {target}").format(
                 source=input_dir, target=output_file
@@ -1405,7 +1804,11 @@ class MainWindow(QMainWindow):
             if edit.text().strip()
         ]
         self.worker = ExtractionWorker(
-            input_dir, output_file, self._collect_exclusions(), tree_folders
+            input_dir,
+            output_file,
+            self._collect_exclusions(),
+            tree_folders,
+            self._collect_extension_rules(),
         )
         self.worker.log_message.connect(self._append_log)
         self.worker.progress_changed.connect(self.progress.setValue)
@@ -1469,6 +1872,19 @@ class MainWindow(QMainWindow):
                 kind = kinds[row] if row < len(kinds) else None
                 self._excl_kinds[row] = kind if kind in ("dir", "file") else "dir"
                 self.excl_clear_buttons[row].setEnabled(True)
+
+            if self.settings.value("filters/configured", False, type=bool):
+                self._clear_filter_rules()
+                tokens = self._read_list(self.settings, "filters/extensions")
+                actions = self._read_list(self.settings, "filters/actions")
+                for row, token in enumerate(tokens):
+                    action = (
+                        actions[row]
+                        if row < len(actions)
+                        else FILTER_MENTION
+                    )
+                    if normalize_filter_token(token):
+                        self._add_filter_row(token, action)
         finally:
             self._restoring = False
         self._update_exclusion_status()
@@ -1491,6 +1907,14 @@ class MainWindow(QMainWindow):
                 if edit.text().strip()
             ],
         )
+        filter_rules = self._collect_extension_rules()
+        self.settings.setValue(
+            "filters/extensions", [token for token, _action in filter_rules]
+        )
+        self.settings.setValue(
+            "filters/actions", [action for _token, action in filter_rules]
+        )
+        self.settings.setValue("filters/configured", True)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt naming)
         # Stop the background thread before closing.
